@@ -6,10 +6,7 @@ An end-to-end data analytics pipeline built on AWS that ingests, transforms, and
 
 ## 📊 Live Dashboard
 
-👉 **[View Live Dashboard](https://YOUR-USERNAME.github.io/olist-ecommerce-analytics/ecommerce_analytics_pipeline.html)**
-
-> Replace `YOUR-USERNAME` with your GitHub username after enabling GitHub Pages.
-
+👉 **[View Live Dashboard](https://github.com/Vedikaaa23/olist-ecommerce-analytics/settings/pages)**
 ---
 
 ## 🏗️ Architecture
