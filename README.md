@@ -4,10 +4,6 @@ An end-to-end data analytics pipeline built on AWS that ingests, transforms, and
 
 ---
 
-## 📊 Live Dashboard
-
-👉 **[View Live Dashboard](https://vedikaaa23.github.io/olist-ecommerce-analytics/ecommerce_analytics_pipeline.html)**
----
 
 ## 🏗️ Architecture
 
