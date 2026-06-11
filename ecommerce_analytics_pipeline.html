@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>E-Commerce Analytics Pipeline</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #f78166;
+    --blue: #79c0ff;
+    --green: #56d364;
+    --amber: #e3b341;
+    --purple: #bc8cff;
+    --teal: #39d353;
+    --red: #f85149;
+    --font-mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* Layout */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 220px; background: var(--bg2); border-right: 1px solid var(--border); padding: 0; display: flex; flex-direction: column; flex-shrink: 0; }
+  .main { flex: 1; overflow-y: auto; }
+
+  /* Sidebar */
+  .logo { padding: 20px 18px 16px; border-bottom: 1px solid var(--border); }
+  .logo-title { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: 0.05em; }
+  .logo-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .nav-section { padding: 12px 12px 4px; font-size: 10px; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 7px 14px; cursor: pointer; font-size: 13px; color: var(--muted); border-left: 2px solid transparent; transition: all 0.15s; }
+  .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+  .nav-item.active { color: var(--text); background: rgba(247,129,102,0.1); border-left-color: var(--accent); }
+  .nav-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sidebar-footer { margin-top: auto; padding: 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+  .badge-aws { background: rgba(247,129,102,0.15); color: var(--accent); padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+
+  /* Page header */
+  .page-header { padding: 20px 28px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; }
+  .page-title { font-size: 17px; font-weight: 600; }
+  .page-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .header-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hbadge { font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 600; border: 1px solid; }
+  .hbadge-s3 { color: #f0a050; border-color: #f0a050; background: rgba(240,160,80,0.1); }
+  .hbadge-glue { color: var(--purple); border-color: var(--purple); background: rgba(188,140,255,0.1); }
+  .hbadge-rs { color: var(--blue); border-color: var(--blue); background: rgba(121,192,255,0.1); }
+  .hbadge-qs { color: var(--green); border-color: var(--green); background: rgba(86,211,100,0.1); }
+
+  /* Content */
+  .content { padding: 22px 28px; }
+  .section { margin-bottom: 28px; }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 12px; }
+
+  /* KPI cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kpi-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .kpi-value { font-size: 24px; font-weight: 700; }
+  .kpi-change { font-size: 11px; margin-top: 4px; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+
+  /* Charts grid */
+  .chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .chart-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+  .chart-sub { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+  canvas { max-height: 240px; }
+
+  /* Table */
+  .table-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th { text-align: left; padding: 6px 10px; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
+  tbody tr { border-bottom: 1px solid rgba(48,54,61,0.5); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 8px 10px; }
+  .rank-num { color: var(--muted); font-weight: 600; }
+  .rev-bar-bg { background: var(--bg3); border-radius: 3px; height: 5px; width: 100px; overflow: hidden; }
+  .rev-bar { height: 100%; border-radius: 3px; background: var(--accent); }
+
+  /* Funnel */
+  .funnel-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .funnel-label { width: 110px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .funnel-bar-bg { flex: 1; background: var(--bg3); border-radius: 3px; height: 22px; overflow: hidden; }
+  .funnel-bar { height: 100%; border-radius: 3px; display: flex; align-items: center; padding-left: 10px; font-size: 11px; font-weight: 600; transition: width 0.6s ease; }
+  .funnel-pct { width: 48px; text-align: right; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+
+  /* Cohort heatmap */
+  .cohort-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .cohort-table th { padding: 5px 8px; text-align: center; color: var(--muted); font-weight: 500; font-size: 10px; }
+  .cohort-table td { padding: 4px 3px; text-align: center; border-radius: 3px; }
+  .cohort-label { text-align: left !important; color: var(--muted); font-size: 10px; padding-right: 10px !important; white-space: nowrap; }
+
+  /* RFM segments */
+  .rfm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .rfm-card { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+  .rfm-seg { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .rfm-count { font-size: 20px; font-weight: 700; }
+  .rfm-desc { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  /* SQL viewer */
+  .sql-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .sql-tab { padding: 5px 12px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg3); color: var(--muted); font-size: 11px; cursor: pointer; font-family: var(--font-mono); }
+  .sql-tab.active { border-color: var(--blue); color: var(--blue); background: rgba(121,192,255,0.08); }
+  .sql-code { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.7; overflow-x: auto; white-space: pre; color: #cdd9e5; }
+  .kw { color: #f47067; }
+  .fn { color: #dcbdfb; }
+  .str { color: #96d0ff; }
+  .cm { color: #768390; font-style: italic; }
+  .num { color: #6cb6ff; }
+
+  /* Architecture */
+  .arch-flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; margin-bottom: 20px; }
+  .arch-node { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; text-align: center; min-width: 110px; }
+  .arch-node-icon { font-size: 22px; margin-bottom: 5px; }
+  .arch-node-title { font-size: 12px; font-weight: 600; }
+  .arch-node-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .arch-arrow { font-size: 18px; color: var(--muted); padding: 0 8px; }
+  .arch-details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .arch-detail { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .arch-detail-title { font-size: 11px; font-weight: 600; margin-bottom: 8px; }
+  .arch-step { font-size: 11px; color: var(--muted); margin-bottom: 4px; display: flex; gap: 6px; }
+  .arch-step-num { color: var(--accent); font-weight: 700; flex-shrink: 0; }
+
+  /* Hidden sections */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .chart-grid { grid-template-columns: 1fr; }
+    .arch-details { grid-template-columns: repeat(2, 1fr); }
+    .rfm-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="logo">
+      <div class="logo-title">🛒 OLIST ANALYTICS</div>
+      <div class="logo-sub">E-Commerce Pipeline</div>
+    </div>
+    <div class="nav-section">Analytics</div>
+    <div class="nav-item active" onclick="showPage('overview')">
+      <div class="nav-dot" style="background:var(--accent)"></div> Overview
+    </div>
+    <div class="nav-item" onclick="showPage('funnel')">
+      <div class="nav-dot" style="background:var(--blue)"></div> Funnel analysis
+    </div>
+    <div class="nav-item" onclick="showPage('retention')">
+      <div class="nav-dot" style="background:var(--purple)"></div> Retention
+    </div>
+    <div class="nav-item" onclick="showPage('rfm')">
+      <div class="nav-dot" style="background:var(--green)"></div> RFM segments
+    </div>
+    <div class="nav-section">Project</div>
+    <div class="nav-item" onclick="showPage('sql')">
+      <div class="nav-dot" style="background:var(--amber)"></div> SQL queries
+    </div>
+    <div class="nav-item" onclick="showPage('architecture')">
+      <div class="nav-dot" style="background:var(--teal)"></div> AWS architecture
+    </div>
+    <div class="sidebar-footer">
+      <div style="margin-bottom:6px;font-size:11px;color:var(--muted);">Data source</div>
+      <span class="badge-aws">Olist Dataset (Kaggle)</span>
+      <div style="margin-top:8px;font-size:10px;color:var(--muted);">~100K orders simulated</div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- OVERVIEW PAGE -->
+    <div id="page-overview" class="page active">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Sales overview</div>
+          <div class="page-sub">Jan 2017 – Aug 2018 · All categories</div>
+        </div>
+        <div class="header-badges">
+          <span class="hbadge hbadge-s3">S3</span>
+          <span class="hbadge hbadge-glue">Glue ETL</span>
+          <span class="hbadge hbadge-rs">Redshift</span>
+          <span class="hbadge hbadge-qs">QuickSight</span>
+        </div>
+      </div>
+      <div class="content">
+
+        <!-- KPI cards -->
+        <div class="section">
+          <div class="section-title">Key metrics</div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">Total revenue</div>
+              <div class="kpi-value" style="color:var(--accent)">$13.6M</div>
+              <div class="kpi-change up">↑ 28.4% vs prev period</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Total orders</div>
+              <div class="kpi-value" style="color:var(--blue)">96,478</div>
+              <div class="kpi-change up">↑ 22.1% vs prev period</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Avg order value</div>
+              <div class="kpi-value" style="color:var(--amber)">$141</div>
+              <div class="kpi-change up">↑ 5.2% vs prev period</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Unique customers</div>
+              <div class="kpi-value" style="color:var(--purple)">89,614</div>
+              <div class="kpi-change down">↓ 2.1% repeat rate</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue trend + categories -->
+        <div class="section">
+          <div class="section-title">Trends</div>
+          <div class="chart-grid">
+            <div class="chart-card">
+              <div class="chart-title">Monthly revenue <span class="chart-sub">Jan 2017 – Aug 2018</span></div>
+              <canvas id="revenueChart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Revenue by category</div>
+              <canvas id="categoryChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top products -->
+        <div class="section">
+          <div class="section-title">Top 10 products by revenue</div>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>Category</th><th>Orders</th><th>Revenue</th><th>Share</th><th>AOV</th>
+                </tr>
+              </thead>
+              <tbody id="products-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FUNNEL PAGE -->
+    <div id="page-funnel" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Funnel analysis</div>
+          <div class="page-sub">User journey from visit to purchase · Redshift SQL</div>
+        </div>
+        <div class="header-badges">
+          <span class="hbadge hbadge-rs">Redshift</span>
+          <span class="hbadge hbadge-qs">QuickSight</span>
+        </div>
+      </div>
+      <div class="content">
+        <div class="section">
+          <div class="section-title">Conversion funnel</div>
+          <div class="chart-card" style="max-width:700px;">
+            <div id="funnel-bars"></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Order status breakdown</div>
+          <div class="chart-grid">
+            <div class="chart-card">
+              <div class="chart-title">Orders by status <span class="chart-sub">all time</span></div>
+              <canvas id="statusChart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Orders by payment type</div>
+              <canvas id="paymentChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Delivery performance</div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">On-time deliveries</div>
+              <div class="kpi-value up">92.3%</div>
+              <div class="kpi-change" style="color:var(--muted)">89,014 orders</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Avg delivery days</div>
+              <div class="kpi-value" style="color:var(--blue)">12.4</div>
+              <div class="kpi-change" style="color:var(--muted)">days from purchase</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Cancelled orders</div>
+              <div class="kpi-value down">625</div>
+              <div class="kpi-change" style="color:var(--muted)">0.6% cancel rate</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Avg review score</div>
+              <div class="kpi-value" style="color:var(--amber)">4.09</div>
+              <div class="kpi-change up">↑ from 3.8 prior yr</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RETENTION PAGE -->
+    <div id="page-retention" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Cohort retention</div>
+          <div class="page-sub">Monthly cohorts, % of users making repeat purchases</div>
+        </div>
+        <div class="header-badges">
+          <span class="hbadge hbadge-rs">Redshift SQL</span>
+        </div>
+      </div>
+      <div class="content">
+        <div class="section">
+          <div class="section-title">Retention heatmap (%)</div>
+          <div class="table-card">
+            <div style="overflow-x:auto;">
+              <table class="cohort-table" id="cohort-table"></table>
+            </div>
+            <div style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);">
+              <div style="display:flex;gap:3px;">
+                <div style="width:16px;height:16px;border-radius:2px;background:rgba(86,211,100,0.08);border:1px solid var(--border)"></div>
+                <div style="width:16px;height:16px;border-radius:2px;background:rgba(86,211,100,0.25)"></div>
+                <div style="width:16px;height:16px;border-radius:2px;background:rgba(86,211,100,0.5)"></div>
+                <div style="width:16px;height:16px;border-radius:2px;background:rgba(86,211,100,0.75)"></div>
+                <div style="width:16px;height:16px;border-radius:2px;background:rgba(86,211,100,1)"></div>
+              </div>
+              Low → High retention
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Retention trend</div>
+          <div class="chart-card">
+            <div class="chart-title">Month-1 retention by cohort</div>
+            <canvas id="retentionChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RFM PAGE -->
+    <div id="page-rfm" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">RFM segmentation</div>
+          <div class="page-sub">Recency · Frequency · Monetary — customer value segments</div>
+        </div>
+        <div class="header-badges">
+          <span class="hbadge hbadge-rs">Redshift SQL</span>
+        </div>
+      </div>
+      <div class="content">
+        <div class="section">
+          <div class="section-title">Customer segments</div>
+          <div class="rfm-grid">
+            <div class="rfm-card" style="border-color:rgba(86,211,100,0.4)">
+              <div class="rfm-seg" style="color:var(--green)">🏆 Champions</div>
+              <div class="rfm-count" style="color:var(--green)">8,412</div>
+              <div class="rfm-desc">Bought recently, often, and spent most. Reward them.</div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted)">Avg spend: <span style="color:var(--green)">$412</span></div>
+            </div>
+            <div class="rfm-card" style="border-color:rgba(121,192,255,0.4)">
+              <div class="rfm-seg" style="color:var(--blue)">💙 Loyal customers</div>
+              <div class="rfm-count" style="color:var(--blue)">12,339</div>
+              <div class="rfm-desc">Buy regularly. Offer upsells and early access.</div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted)">Avg spend: <span style="color:var(--blue)">$228</span></div>
+            </div>
+            <div class="rfm-card" style="border-color:rgba(227,179,65,0.4)">
+              <div class="rfm-seg" style="color:var(--amber)">⭐ Potential loyalists</div>
+              <div class="rfm-count" style="color:var(--amber)">18,764</div>
+              <div class="rfm-desc">Recent buyers, below average frequency. Nurture them.</div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted)">Avg spend: <span style="color:var(--amber)">$141</span></div>
+            </div>
+            <div class="rfm-card" style="border-color:rgba(188,140,255,0.4)">
+              <div class="rfm-seg" style="color:var(--purple)">🆕 New customers</div>
+              <div class="rfm-count" style="color:var(--purple)">21,048</div>
+              <div class="rfm-desc">Bought recently for the first time. Convert them.</div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted)">Avg spend: <span style="color:var(--purple)">$98</span></div>
+            </div>
+            <div class="rfm-card" style="border-color:rgba(247,129,102,0.4)">
+              <div class="rfm-seg" style="color:var(--accent)">😴 At-risk customers</div>
+              <div class="rfm-count" style="color:var(--accent)">16,221</div>
+              <div class="rfm-desc">Bought well before, haven't returned. Win them back.</div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted)">Avg spend: <span style="color:var(--accent)">$183</span></div>
+            </div>
+            <div class="rfm-card" style="border-color:rgba(248,81,73,0.4)">
+              <div class="rfm-seg" style="color:var(--red)">💔 Lost customers</div>
+              <div class="rfm-count" style="color:var(--red)">12,830</div>
+              <div class="rfm-desc">Lowest recency and frequency. Heavy re-engagement needed.</div>
+              <div style="margin-top:8px;font-size:11px;color:var(--muted)">Avg spend: <span style="color:var(--red)">$67</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Revenue by segment</div>
+          <div class="chart-card">
+            <canvas id="rfmChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SQL PAGE -->
+    <div id="page-sql" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">SQL query library</div>
+          <div class="page-sub">Production-ready queries for Redshift / Athena</div>
+        </div>
+        <div class="header-badges">
+          <span class="hbadge hbadge-rs">Redshift</span>
+        </div>
+      </div>
+      <div class="content">
+        <div class="section">
+          <div class="sql-tabs">
+            <div class="sql-tab active" onclick="showSQL(0)">Revenue KPIs</div>
+            <div class="sql-tab" onclick="showSQL(1)">Cohort retention</div>
+            <div class="sql-tab" onclick="showSQL(2)">Funnel analysis</div>
+            <div class="sql-tab" onclick="showSQL(3)">RFM segments</div>
+            <div class="sql-tab" onclick="showSQL(4)">Top products</div>
+          </div>
+          <div id="sql-display" class="sql-code"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCHITECTURE PAGE -->
+    <div id="page-architecture" class="page">
+      <div class="page-header">
+        <div>
+          <div class="page-title">AWS architecture</div>
+          <div class="page-sub">End-to-end pipeline setup guide</div>
+        </div>
+        <div class="header-badges">
+          <span class="hbadge hbadge-s3">S3</span>
+          <span class="hbadge hbadge-glue">Glue</span>
+          <span class="hbadge hbadge-rs">Redshift</span>
+          <span class="hbadge hbadge-qs">QuickSight</span>
+        </div>
+      </div>
+      <div class="content">
+        <div class="section">
+          <div class="section-title">Pipeline flow</div>
+          <div class="arch-flow" style="flex-wrap:nowrap; overflow-x:auto; padding-bottom:10px;">
+            <div class="arch-node">
+              <div class="arch-node-icon">📁</div>
+              <div class="arch-node-title" style="color:#f0a050">AWS S3</div>
+              <div class="arch-node-sub">Raw data lake</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node">
+              <div class="arch-node-icon">⚙️</div>
+              <div class="arch-node-title" style="color:var(--purple)">AWS Glue</div>
+              <div class="arch-node-sub">ETL & catalog</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node">
+              <div class="arch-node-icon">🗄️</div>
+              <div class="arch-node-title" style="color:var(--blue)">Redshift</div>
+              <div class="arch-node-sub">Data warehouse</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node">
+              <div class="arch-node-icon">📊</div>
+              <div class="arch-node-title" style="color:var(--green)">QuickSight</div>
+              <div class="arch-node-sub">Dashboard & BI</div>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Setup steps — free tier</div>
+          <div class="arch-details">
+            <div class="arch-detail">
+              <div class="arch-detail-title" style="color:#f0a050">Step 1 · AWS S3</div>
+              <div class="arch-step"><span class="arch-step-num">1.</span>Create S3 bucket: olist-data-raw</div>
+              <div class="arch-step"><span class="arch-step-num">2.</span>Download Olist dataset from Kaggle</div>
+              <div class="arch-step"><span class="arch-step-num">3.</span>Upload all 9 CSV files to S3</div>
+              <div class="arch-step"><span class="arch-step-num">4.</span>Create folders: /orders, /customers, /products</div>
+              <div class="arch-step"><span class="arch-step-num">5.</span>Enable versioning on bucket</div>
+              <div style="margin-top:10px; font-size:10px; color:var(--muted)">Cost: Free (5GB tier)</div>
+            </div>
+            <div class="arch-detail">
+              <div class="arch-detail-title" style="color:var(--purple)">Step 2 · AWS Glue</div>
+              <div class="arch-step"><span class="arch-step-num">1.</span>Create Glue Data Catalog</div>
+              <div class="arch-step"><span class="arch-step-num">2.</span>Run Glue Crawler on S3 bucket</div>
+              <div class="arch-step"><span class="arch-step-num">3.</span>Verify schema auto-detection</div>
+              <div class="arch-step"><span class="arch-step-num">4.</span>Write Glue job to join tables</div>
+              <div class="arch-step"><span class="arch-step-num">5.</span>Output cleaned Parquet to S3</div>
+              <div style="margin-top:10px; font-size:10px; color:var(--muted)">Cost: 10 DPU-hr/month free</div>
+            </div>
+            <div class="arch-detail">
+              <div class="arch-detail-title" style="color:var(--blue)">Step 3 · Redshift</div>
+              <div class="arch-step"><span class="arch-step-num">1.</span>Create Redshift Serverless workgroup</div>
+              <div class="arch-step"><span class="arch-step-num">2.</span>Create tables: orders, customers, products</div>
+              <div class="arch-step"><span class="arch-step-num">3.</span>COPY data from S3 using IAM role</div>
+              <div class="arch-step"><span class="arch-step-num">4.</span>Run SQL queries in Query Editor v2</div>
+              <div class="arch-step"><span class="arch-step-num">5.</span>Create views for KPIs</div>
+              <div style="margin-top:10px; font-size:10px; color:var(--muted)">Cost: 300 RPU-hr free trial</div>
+            </div>
+            <div class="arch-detail">
+              <div class="arch-detail-title" style="color:var(--green)">Step 4 · QuickSight</div>
+              <div class="arch-step"><span class="arch-step-num">1.</span>Sign up for QuickSight (30-day free)</div>
+              <div class="arch-step"><span class="arch-step-num">2.</span>Connect to Redshift as data source</div>
+              <div class="arch-step"><span class="arch-step-num">3.</span>Create dataset from views</div>
+              <div class="arch-step"><span class="arch-step-num">4.</span>Build revenue, funnel, RFM visuals</div>
+              <div class="arch-step"><span class="arch-step-num">5.</span>Publish & screenshot for portfolio</div>
+              <div style="margin-top:10px; font-size:10px; color:var(--muted)">Cost: Free 30-day trial</div>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Redshift table schema</div>
+          <div class="sql-code"><span class="cm">-- Run these in Redshift Query Editor v2</span>
+
+<span class="kw">CREATE TABLE</span> orders (
+  order_id         VARCHAR(<span class="num">50</span>)  <span class="kw">PRIMARY KEY</span>,
+  customer_id      VARCHAR(<span class="num">50</span>),
+  order_status     VARCHAR(<span class="num">20</span>),
+  order_purchase   TIMESTAMP,
+  order_delivered  TIMESTAMP,
+  order_estimated  TIMESTAMP
+);
+
+<span class="kw">CREATE TABLE</span> order_items (
+  order_id         VARCHAR(<span class="num">50</span>),
+  product_id       VARCHAR(<span class="num">50</span>),
+  seller_id        VARCHAR(<span class="num">50</span>),
+  price            DECIMAL(<span class="num">10</span>,<span class="num">2</span>),
+  freight_value    DECIMAL(<span class="num">10</span>,<span class="num">2</span>)
+);
+
+<span class="kw">CREATE TABLE</span> customers (
+  customer_id      VARCHAR(<span class="num">50</span>)  <span class="kw">PRIMARY KEY</span>,
+  customer_city    VARCHAR(<span class="num">100</span>),
+  customer_state   VARCHAR(<span class="num">10</span>)
+);
+
+<span class="kw">CREATE TABLE</span> products (
+  product_id       VARCHAR(<span class="num">50</span>)  <span class="kw">PRIMARY KEY</span>,
+  product_category VARCHAR(<span class="num">100</span>),
+  product_weight_g INT
+);
+
+<span class="cm">-- Load from S3 (replace with your bucket & IAM role ARN)</span>
+<span class="kw">COPY</span> orders <span class="kw">FROM</span> <span class="str">'s3://olist-data-raw/orders/olist_orders_dataset.csv'</span>
+  IAM_ROLE <span class="str">'arn:aws:iam::YOUR_ACCOUNT:role/RedshiftS3Role'</span>
+  CSV IGNOREHEADER <span class="num">1</span>;</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────
+const months = ['Jan 17','Feb 17','Mar 17','Apr 17','May 17','Jun 17','Jul 17','Aug 17','Sep 17','Oct 17','Nov 17','Dec 17','Jan 18','Feb 18','Mar 18','Apr 18','May 18','Jun 18','Jul 18','Aug 18'];
+const revenue = [312000,345000,389000,402000,478000,521000,567000,612000,698000,734000,892000,756000,801000,845000,912000,967000,1034000,1089000,1145000,1198000];
+const orders =  [2100,2350,2680,2780,3240,3560,3890,4120,4670,4920,5980,5100,5380,5680,6140,6480,6890,7240,7560,7920];
+
+const categories = ['Bed & Bath','Health & Beauty','Sports','Computers','Furniture','Housewares','Watches','Telephony','Auto','Toys'];
+const catRevenue = [2340000,1980000,1450000,1230000,1100000,980000,870000,760000,620000,540000];
+
+const funnelData = [
+  { label: 'Visited site', count: 500000, color: '#79c0ff' },
+  { label: 'Viewed product', count: 312000, color: '#bc8cff' },
+  { label: 'Added to cart', count: 148000, color: '#e3b341' },
+  { label: 'Started checkout', count: 104000, color: '#f78166' },
+  { label: 'Completed order', count: 96478, color: '#56d364' },
+];
+
+const cohortMonths = ['Jan 17','Feb 17','Mar 17','Apr 17','May 17','Jun 17','Jul 17','Aug 17','Sep 17'];
+const cohortSizes = [4200,3850,4100,3980,4560,4320,4780,5100,4890];
+const cohortData = [
+  [100,4.2,2.1,1.8,1.4,1.1,0.9,0.7,0.5],
+  [100,3.8,1.9,1.5,1.2,1.0,0.8,0.6],
+  [100,4.5,2.3,1.9,1.5,1.2,0.9],
+  [100,4.1,2.0,1.7,1.3,1.0],
+  [100,4.8,2.5,2.1,1.6],
+  [100,4.3,2.2,1.8],
+  [100,5.1,2.6],
+  [100,4.9],
+  [100],
+];
+
+const sqlQueries = [
+`<span class="cm">-- Revenue KPIs: monthly revenue, orders, AOV</span>
+<span class="kw">SELECT</span>
+  <span class="fn">DATE_TRUNC</span>(<span class="str">'month'</span>, o.order_purchase)   <span class="kw">AS</span> order_month,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> o.order_id)                <span class="kw">AS</span> total_orders,
+  <span class="fn">SUM</span>(i.price + i.freight_value)            <span class="kw">AS</span> total_revenue,
+  <span class="fn">AVG</span>(i.price + i.freight_value)            <span class="kw">AS</span> avg_order_value,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> o.customer_id)            <span class="kw">AS</span> unique_customers
+<span class="kw">FROM</span> orders o
+<span class="kw">JOIN</span> order_items i <span class="kw">ON</span> o.order_id = i.order_id
+<span class="kw">WHERE</span> o.order_status = <span class="str">'delivered'</span>
+<span class="kw">GROUP BY</span> <span class="num">1</span>
+<span class="kw">ORDER BY</span> <span class="num">1</span>;`,
+
+`<span class="cm">-- Cohort retention: % of users making repeat purchase</span>
+<span class="kw">WITH</span> first_purchase <span class="kw">AS</span> (
+  <span class="kw">SELECT</span>
+    customer_id,
+    <span class="fn">MIN</span>(<span class="fn">DATE_TRUNC</span>(<span class="str">'month'</span>, order_purchase)) <span class="kw">AS</span> cohort_month
+  <span class="kw">FROM</span> orders
+  <span class="kw">WHERE</span> order_status = <span class="str">'delivered'</span>
+  <span class="kw">GROUP BY</span> customer_id
+),
+subsequent <span class="kw">AS</span> (
+  <span class="kw">SELECT</span>
+    f.customer_id,
+    f.cohort_month,
+    <span class="fn">DATEDIFF</span>(<span class="str">'month'</span>, f.cohort_month,
+      <span class="fn">DATE_TRUNC</span>(<span class="str">'month'</span>, o.order_purchase)) <span class="kw">AS</span> months_since
+  <span class="kw">FROM</span> first_purchase f
+  <span class="kw">JOIN</span> orders o <span class="kw">ON</span> f.customer_id = o.customer_id
+  <span class="kw">WHERE</span> o.order_purchase > f.cohort_month
+    <span class="kw">AND</span> o.order_status = <span class="str">'delivered'</span>
+)
+<span class="kw">SELECT</span>
+  cohort_month,
+  months_since,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> customer_id)              <span class="kw">AS</span> retained_users,
+  <span class="fn">ROUND</span>(<span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> customer_id) * <span class="num">100.0</span>
+    / cohort_sizes.cohort_size, <span class="num">1</span>)           <span class="kw">AS</span> retention_pct
+<span class="kw">FROM</span> subsequent
+<span class="kw">JOIN</span> (
+  <span class="kw">SELECT</span> cohort_month, <span class="fn">COUNT</span>(*) cohort_size
+  <span class="kw">FROM</span> first_purchase <span class="kw">GROUP BY</span> <span class="num">1</span>
+) cohort_sizes <span class="kw">USING</span> (cohort_month)
+<span class="kw">GROUP BY</span> <span class="num">1</span>, <span class="num">2</span>
+<span class="kw">ORDER BY</span> <span class="num">1</span>, <span class="num">2</span>;`,
+
+`<span class="cm">-- Funnel analysis: drop-off at each step</span>
+<span class="kw">SELECT</span>
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> session_id)                          <span class="kw">AS</span> visited,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> <span class="kw">CASE</span> <span class="kw">WHEN</span> viewed_product  <span class="kw">THEN</span> session_id <span class="kw">END</span>) <span class="kw">AS</span> viewed,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> <span class="kw">CASE</span> <span class="kw">WHEN</span> added_to_cart   <span class="kw">THEN</span> session_id <span class="kw">END</span>) <span class="kw">AS</span> carted,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> <span class="kw">CASE</span> <span class="kw">WHEN</span> started_checkout <span class="kw">THEN</span> session_id <span class="kw">END</span>) <span class="kw">AS</span> checkout,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> <span class="kw">CASE</span> <span class="kw">WHEN</span> purchased       <span class="kw">THEN</span> session_id <span class="kw">END</span>) <span class="kw">AS</span> purchased,
+  <span class="cm">-- Drop-off rates</span>
+  <span class="fn">ROUND</span>(viewed    * <span class="num">100.0</span> / visited,  <span class="num">1</span>) <span class="kw">AS</span> view_rate,
+  <span class="fn">ROUND</span>(carted    * <span class="num">100.0</span> / viewed,   <span class="num">1</span>) <span class="kw">AS</span> cart_rate,
+  <span class="fn">ROUND</span>(checkout  * <span class="num">100.0</span> / carted,   <span class="num">1</span>) <span class="kw">AS</span> checkout_rate,
+  <span class="fn">ROUND</span>(purchased * <span class="num">100.0</span> / checkout, <span class="num">1</span>) <span class="kw">AS</span> purchase_rate
+<span class="kw">FROM</span> user_sessions;`,
+
+`<span class="cm">-- RFM segmentation using NTILE window function</span>
+<span class="kw">WITH</span> rfm_base <span class="kw">AS</span> (
+  <span class="kw">SELECT</span>
+    customer_id,
+    <span class="fn">DATEDIFF</span>(<span class="str">'day'</span>, <span class="fn">MAX</span>(order_purchase), <span class="fn">CURRENT_DATE</span>) <span class="kw">AS</span> recency,
+    <span class="fn">COUNT</span>(order_id)                                       <span class="kw">AS</span> frequency,
+    <span class="fn">SUM</span>(total_amount)                                     <span class="kw">AS</span> monetary
+  <span class="kw">FROM</span> orders
+  <span class="kw">WHERE</span> order_status = <span class="str">'delivered'</span>
+  <span class="kw">GROUP BY</span> customer_id
+),
+rfm_scores <span class="kw">AS</span> (
+  <span class="kw">SELECT</span> *,
+    <span class="fn">NTILE</span>(<span class="num">5</span>) <span class="kw">OVER</span> (<span class="kw">ORDER BY</span> recency  <span class="kw">DESC</span>) <span class="kw">AS</span> r_score,
+    <span class="fn">NTILE</span>(<span class="num">5</span>) <span class="kw">OVER</span> (<span class="kw">ORDER BY</span> frequency <span class="kw">ASC</span>)  <span class="kw">AS</span> f_score,
+    <span class="fn">NTILE</span>(<span class="num">5</span>) <span class="kw">OVER</span> (<span class="kw">ORDER BY</span> monetary  <span class="kw">ASC</span>)  <span class="kw">AS</span> m_score
+  <span class="kw">FROM</span> rfm_base
+)
+<span class="kw">SELECT</span> *,
+  <span class="kw">CASE</span>
+    <span class="kw">WHEN</span> r_score >= <span class="num">4</span> <span class="kw">AND</span> f_score >= <span class="num">4</span>              <span class="kw">THEN</span> <span class="str">'Champions'</span>
+    <span class="kw">WHEN</span> f_score >= <span class="num">3</span> <span class="kw">AND</span> r_score >= <span class="num">3</span>              <span class="kw">THEN</span> <span class="str">'Loyal Customers'</span>
+    <span class="kw">WHEN</span> r_score >= <span class="num">4</span> <span class="kw">AND</span> f_score < <span class="num">3</span>              <span class="kw">THEN</span> <span class="str">'Potential Loyalists'</span>
+    <span class="kw">WHEN</span> r_score >= <span class="num">4</span>                               <span class="kw">THEN</span> <span class="str">'New Customers'</span>
+    <span class="kw">WHEN</span> r_score < <span class="num">3</span> <span class="kw">AND</span> f_score >= <span class="num">3</span>              <span class="kw">THEN</span> <span class="str">'At-Risk'</span>
+    <span class="kw">ELSE</span> <span class="str">'Lost Customers'</span>
+  <span class="kw">END</span> <span class="kw">AS</span> segment
+<span class="kw">FROM</span> rfm_scores;`,
+
+`<span class="cm">-- Top products by revenue with running total & rank</span>
+<span class="kw">SELECT</span>
+  p.product_category,
+  <span class="fn">COUNT</span>(<span class="kw">DISTINCT</span> i.order_id)                         <span class="kw">AS</span> total_orders,
+  <span class="fn">SUM</span>(i.price)                                        <span class="kw">AS</span> total_revenue,
+  <span class="fn">AVG</span>(i.price)                                        <span class="kw">AS</span> avg_price,
+  <span class="fn">RANK</span>() <span class="kw">OVER</span> (<span class="kw">ORDER BY</span> <span class="fn">SUM</span>(i.price) <span class="kw">DESC</span>)          <span class="kw">AS</span> revenue_rank,
+  <span class="fn">SUM</span>(<span class="fn">SUM</span>(i.price)) <span class="kw">OVER</span> (
+    <span class="kw">ORDER BY</span> <span class="fn">SUM</span>(i.price) <span class="kw">DESC</span>
+    <span class="kw">ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</span>
+  )                                                   <span class="kw">AS</span> running_revenue,
+  <span class="fn">ROUND</span>(<span class="fn">SUM</span>(i.price) * <span class="num">100.0</span>
+    / <span class="fn">SUM</span>(<span class="fn">SUM</span>(i.price)) <span class="kw">OVER</span> (), <span class="num">1</span>)                  <span class="kw">AS</span> pct_of_total
+<span class="kw">FROM</span> order_items i
+<span class="kw">JOIN</span> products p <span class="kw">ON</span> i.product_id = p.product_id
+<span class="kw">JOIN</span> orders o    <span class="kw">ON</span> i.order_id  = o.order_id
+<span class="kw">WHERE</span> o.order_status = <span class="str">'delivered'</span>
+<span class="kw">GROUP BY</span> p.product_category
+<span class="kw">ORDER BY</span> revenue_rank
+<span class="kw">LIMIT</span> <span class="num">10</span>;`
+];
+
+// ── Chart defaults ────────────────────────────────────────────────────────
+Chart.defaults.color = '#7d8590';
+Chart.defaults.borderColor = '#30363d';
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+// ── Revenue trend chart ───────────────────────────────────────────────────
+new Chart(document.getElementById('revenueChart'), {
+  type: 'bar',
+  data: {
+    labels: months,
+    datasets: [{
+      label: 'Revenue ($)',
+      data: revenue,
+      backgroundColor: revenue.map((v,i) => i >= 12 ? 'rgba(247,129,102,0.7)' : 'rgba(121,192,255,0.4)'),
+      borderColor: revenue.map((v,i) => i >= 12 ? '#f78166' : '#79c0ff'),
+      borderWidth: 1,
+      borderRadius: 3,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false }, tooltip: {
+      callbacks: { label: ctx => ' $' + (ctx.raw/1000).toFixed(0) + 'K' }
+    }},
+    scales: {
+      x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
+      y: { ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K' } }
+    }
+  }
+});
+
+// ── Category donut chart ──────────────────────────────────────────────────
+new Chart(document.getElementById('categoryChart'), {
+  type: 'doughnut',
+  data: {
+    labels: categories,
+    datasets: [{
+      data: catRevenue,
+      backgroundColor: ['#f78166','#79c0ff','#56d364','#e3b341','#bc8cff','#f0a050','#39d353','#96cbfe','#ffa198','#cae8ff'],
+      borderColor: '#161b22',
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'right', labels: { font: { size: 10 }, padding: 8 } },
+      tooltip: { callbacks: { label: ctx => ' $' + (ctx.raw/1000).toFixed(0) + 'K' } }
+    }
+  }
+});
+
+// ── Products table ─────────────────────────────────────────────────────────
+const tbody = document.getElementById('products-table');
+const maxRev = catRevenue[0];
+categories.forEach((cat, i) => {
+  const rev = catRevenue[i];
+  const ord = orders[Math.floor(i * 1.4) + 1000] || (8000 - i * 600);
+  const aov = Math.round(rev / (ord || 1));
+  const pct = Math.round(rev * 100 / maxRev);
+  tbody.innerHTML += `<tr>
+    <td class="rank-num">${i+1}</td>
+    <td>${cat}</td>
+    <td>${(6800 - i*520).toLocaleString()}</td>
+    <td style="color:var(--accent)">$${(rev/1000).toFixed(0)}K</td>
+    <td>
+      <div class="rev-bar-bg"><div class="rev-bar" style="width:${pct}%"></div></div>
+    </td>
+    <td style="color:var(--muted)">$${aov}</td>
+  </tr>`;
+});
+
+// ── Funnel bars ───────────────────────────────────────────────────────────
+const funnelContainer = document.getElementById('funnel-bars');
+funnelData.forEach((step, i) => {
+  const pct = Math.round(step.count * 100 / funnelData[0].count);
+  const dropPct = i > 0 ? Math.round((1 - step.count / funnelData[i-1].count) * 100) : null;
+  funnelContainer.innerHTML += `
+  <div class="funnel-row">
+    <div class="funnel-label">${step.label}</div>
+    <div class="funnel-bar-bg">
+      <div class="funnel-bar" style="width:${pct}%;background:${step.color}20;border-left:3px solid ${step.color};color:${step.color}">
+        ${step.count.toLocaleString()}
+      </div>
+    </div>
+    <div class="funnel-pct">${pct}%${dropPct ? `<span style="color:var(--red);font-size:10px;display:block">-${dropPct}%</span>` : ''}</div>
+  </div>`;
+});
+
+// ── Status chart ──────────────────────────────────────────────────────────
+new Chart(document.getElementById('statusChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Delivered','Shipped','Processing','Cancelled','Unavailable'],
+    datasets: [{ data: [89014,4432,1408,625,999],
+      backgroundColor: ['#56d36480','#79c0ff80','#e3b34180','#f8514980','#bc8cff80'],
+      borderColor:     ['#56d364','#79c0ff','#e3b341','#f85149','#bc8cff'],
+      borderWidth:1, borderRadius:3 }]
+  },
+  options: { responsive:true, plugins:{legend:{display:false}}, scales:{x:{ticks:{font:{size:10}}}} }
+});
+
+// ── Payment chart ─────────────────────────────────────────────────────────
+new Chart(document.getElementById('paymentChart'), {
+  type: 'pie',
+  data: {
+    labels: ['Credit card','Boleto','Debit card','Voucher'],
+    datasets: [{ data: [73924,19784,1529,5241],
+      backgroundColor: ['#f7816680','#79c0ff80','#56d36480','#e3b34180'],
+      borderColor: ['#f78166','#79c0ff','#56d364','#e3b341'], borderWidth:2 }]
+  },
+  options: { responsive:true, plugins:{legend:{position:'bottom',labels:{font:{size:10},padding:8}}} }
+});
+
+// ── Cohort heatmap ────────────────────────────────────────────────────────
+function heatColor(val) {
+  if (val === 100) return '#1c2128';
+  const alpha = Math.min(val / 6, 1);
+  return `rgba(86,211,100,${alpha.toFixed(2)})`;
+}
+function heatText(val) {
+  if (val === 100) return '#e6edf3';
+  return val > 3 ? '#39d353' : '#7d8590';
+}
+const ct = document.getElementById('cohort-table');
+const maxCols = cohortData[0].length;
+let hdr = '<thead><tr><th>Cohort</th><th>Size</th>';
+for (let m = 0; m < maxCols; m++) hdr += `<th>M+${m}</th>`;
+hdr += '</tr></thead><tbody>';
+let body = '';
+cohortData.forEach((row, r) => {
+  body += `<tr><td class="cohort-label">${cohortMonths[r]}</td><td style="color:var(--muted);text-align:center">${cohortSizes[r].toLocaleString()}</td>`;
+  for (let c = 0; c < maxCols; c++) {
+    if (c < row.length) {
+      const v = row[c];
+      body += `<td style="background:${heatColor(v)};color:${heatText(v)};font-weight:500">${v}%</td>`;
+    } else {
+      body += '<td></td>';
+    }
+  }
+  body += '</tr>';
+});
+ct.innerHTML = hdr + body + '</tbody>';
+
+// ── Retention line chart ──────────────────────────────────────────────────
+new Chart(document.getElementById('retentionChart'), {
+  type: 'line',
+  data: {
+    labels: cohortMonths,
+    datasets: [{
+      label: 'Month-1 retention %',
+      data: [4.2,3.8,4.5,4.1,4.8,4.3,5.1,4.9,null],
+      borderColor: '#56d364',
+      backgroundColor: 'rgba(86,211,100,0.1)',
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: '#56d364',
+    }]
+  },
+  options: {
+    responsive:true,
+    plugins:{legend:{display:false}},
+    scales:{ y:{ ticks:{ callback: v => v+'%' }, min:0 } }
+  }
+});
+
+// ── RFM bar chart ─────────────────────────────────────────────────────────
+new Chart(document.getElementById('rfmChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Champions','Loyal','Potential','New','At-risk','Lost'],
+    datasets: [{
+      label: 'Total revenue ($)',
+      data: [3464000,2813000,2646000,2063000,2968000,860000],
+      backgroundColor: ['#56d36480','#79c0ff80','#e3b34180','#bc8cff80','#f7816680','#f8514980'],
+      borderColor:     ['#56d364','#79c0ff','#e3b341','#bc8cff','#f78166','#f85149'],
+      borderWidth:1, borderRadius:3
+    }]
+  },
+  options:{
+    responsive:true,
+    plugins:{legend:{display:false}},
+    scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'K'}}}
+  }
+});
+
+// ── Navigation ────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── SQL viewer ────────────────────────────────────────────────────────────
+function showSQL(idx) {
+  document.querySelectorAll('.sql-tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.getElementById('sql-display').innerHTML = sqlQueries[idx];
+}
+showSQL(0);
+</script>
+</body>
+</html>
